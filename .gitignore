@@ -1,2 +1,6 @@
 venv
 .idea
+session
+
+__pycache__/
+*.py[cod]
