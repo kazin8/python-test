@@ -42,6 +42,7 @@ class EmaRsiBBCombined(StrategyInterface):
                 (
                     crossed_above(dataframe['ema_50'], dataframe['ema_200'])
                 )
+                # @todo implement bb conditions
             ),
             'buy'
         ] = True
@@ -61,6 +62,7 @@ class EmaRsiBBCombined(StrategyInterface):
                 (
                     crossed_below(dataframe['ema_200'], dataframe['ema_50'])
                 )
+                # @todo implement bb conditions
             ),
             'sell'
         ] = True
