@@ -1,0 +1,16 @@
+{
+    "platform": "saxo",
+    "app_key": "28ebae46ed034be5a7179fa39b789946",
+    "auth_endpoint": "https://sim.logonvalidation.net/authorize",
+    "token_endpoint": "https://sim.logonvalidation.net/token",
+    "secret": "521a0fd53a7c4eeaa8177a497e5e4cbd",
+
+    "strategy": {
+        "type": "priceLimit",
+        "buyPrice": 82.9,
+        "sellPrice": 82.99,
+        "profit": 0.09,
+        "ticker": "SGDJPY",
+        "amount": 1000
+    }
+}
