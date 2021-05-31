@@ -31,6 +31,8 @@ class EmaRsiBBCombined(StrategyInterface):
 
     # detect buy reason
     def populate_buy_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        dataframe['buy'] = False
+
         dataframe.loc[
             (
                 (
@@ -48,6 +50,8 @@ class EmaRsiBBCombined(StrategyInterface):
 
     # detect sell reason
     def populate_sell_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        dataframe['sell'] = False
+
         dataframe.loc[
             (
                 (

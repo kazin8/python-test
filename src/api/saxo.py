@@ -75,7 +75,7 @@ class Session:
     def get_token(self, force_remove=False):
         current_dir = os.path.dirname(os.path.abspath(__file__))
         auth_file_name = 'session'
-        auth_file_path = os.path.join(current_dir, '../', auth_file_name)
+        auth_file_path = os.path.join(current_dir, '../../', auth_file_name)
 
         if force_remove:
             os.remove(auth_file_path)

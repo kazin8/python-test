@@ -3,6 +3,8 @@ import pprint
 import traceback
 
 import pandas as pd
+
+from src.broker.saxo import SaxoBroker
 from strategies.EmaRsiBBCombined import EmaRsiBBCombined
 
 pd.set_option('display.max_rows', None)
@@ -10,94 +12,63 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 1000)
 pd.set_option('mode.chained_assignment', None)
 
-from api.saxo import Session
-import sched, time
-
 CONFIG_PATH = 'config.json'
 
 config = json.loads(open(CONFIG_PATH, 'r').read())
-APP_KEY = config.get('app_key')
-AUTH_ENDPOINT = config.get('auth_endpoint')
-TOKEN_ENDPOINT = config.get('token_endpoint')
-SECRET = config.get('secret')
-STRATEGY = config.get('strategy')
+STRATEGY_CONFIG = config.get('strategy')
 
+brokers = {
+    'saxo': SaxoBroker,
+}
 
-# s = sched.scheduler(time.time, time.sleep)
-
-def get_instrument(ticker):
-    return access.get('ref/v1/instruments', KeyWords=ticker, AssetTypes='FxSpot')
-
-
-def get_candles(uic, timeframe=60, limit=1200):
-    return access.get('chart/v1/charts/', AssetType='FxSpot', Horizon=timeframe, Uic=uic, Count=limit)
-
-
-def place_limit_order(uic, direction, amount, price):
-    return access.post('trade/v2/orders', post={
-        'Uic': uic,
-        'BuySell': direction,
-        'AssetType': 'FxSpot',
-        'Amount': amount,
-        'OrderPrice': price,
-        'OrderType': 'Limit',
-        'OrderRelation': 'StandAlone',
-        'ManualOrder': 'true',
-        'OrderDuration': {
-            'DurationType': 'GoodTillCancel'
-        }
-    })
-
-
-# def get_orders(sc):
-#     orders = access.get('port/v1/orders/me',
-#                         FieldGroups='DisplayAndFormat')
-# s.enter(5, 1, get_orders, (sc,))
-
+strategies = {
+    'EmaRsiBBCombined': EmaRsiBBCombined,
+    # 'SimplePriceLimit'
+}
 
 if __name__ == '__main__':
-    # a = 1
-    access = Session(APP_KEY, AUTH_ENDPOINT, TOKEN_ENDPOINT, SECRET)
-    print('[Authorised SAXO]')
-
+    broker = None
     try:
-        instrument = get_instrument(STRATEGY['ticker'])
+        broker = brokers[config.get('platform')](config)
+    except KeyError:
+        print('Unknown broker ' + config.get('platform') + '; Stop working')
+        exit(1)
 
-        identifier = instrument['Data'][0]['Identifier']
+    strategy = None
+    try:
+        strategy = strategies[STRATEGY_CONFIG['type']]()
+    except KeyError:
+        print('Unknown strategy type ' + STRATEGY_CONFIG['type'] + '; Stop working')
+        exit(1)
 
-        # out = access.get('trade/v1/infoprices/list', Uics=identifier, AssetType='FxSpot', Amount=STRATEGY['amount'],
-        #                  FieldGroups='DisplayAndFormat,Quote')
+    instrument = broker.get_instrument(STRATEGY_CONFIG['ticker'])
+    identifier = broker.get_instrument_id()
 
-        # get candles
-        out = get_candles(identifier)
+    # out = access.get('trade/v1/infoprices/list', Uics=identifier, AssetType='FxSpot', Amount=STRATEGY['amount'],
+    #                  FieldGroups='DisplayAndFormat,Quote')
 
-        # create dataframe
-        df = pd.DataFrame(out['Data'], columns=['Time', 'OpenAsk', 'HighAsk', 'LowAsk', 'CloseAsk'])
-        df.columns = ['time', 'open', 'high', 'low', 'close']
+    # get candles
+    out = broker.get_candles(identifier)
 
-        # resolve strategy
-        strategy = EmaRsiBBCombined()
-        strategy.populate_indicators(dataframe=df, metadata=instrument)
-        strategy.populate_buy_trend(dataframe=df, metadata=instrument)
-        strategy.populate_sell_trend(dataframe=df, metadata=instrument)
+    # create dataframe
+    df = pd.DataFrame(out['Data'], columns=['Time', 'OpenAsk', 'HighAsk', 'LowAsk', 'CloseAsk'])
+    df.columns = ['time', 'open', 'high', 'low', 'close']
 
-        # print(df)
+    # calculate strategy indicators & trends
+    strategy.populate_indicators(dataframe=df, metadata=instrument)
+    strategy.populate_buy_trend(dataframe=df, metadata=instrument)
+    strategy.populate_sell_trend(dataframe=df, metadata=instrument)
 
-        # when last row (current candle) has buy/sell signal
-        # script should place limit order
-        last_row = df.tail(1)
-        if last_row['buy'].bool():
-            pass # place buy order
-        elif df.tail(1)['sell'].bool():
-            pass # place sell order
+    print(df)
 
-        if STRATEGY['type'] == 'priceLimit':
-            # s.enter(5, 1, getOrders, (s,))
-            # s.run()
+    order = None
+    # when last row (current candle) has buy/sell signal
+    # script should place limit order
+    last_row = df.tail(1)
+    if last_row['buy'].bool():
+        order = broker.place_limit_order(identifier, 'Buy', STRATEGY_CONFIG['amount'], STRATEGY_CONFIG['buyPrice'])
+    elif last_row['sell'].bool():
+        # should be refactor to use local db with open orders
+        order = broker.place_limit_order(identifier, 'Sell', STRATEGY_CONFIG['amount'], STRATEGY_CONFIG['buyPrice'])
 
-            order = place_limit_order(identifier, 'Buy', STRATEGY['amount'], STRATEGY['buyPrice'])
-
-            print(order)
-
-    except:
-        print('\n** EXCEPTION **\n', traceback.format_exc(), '\n')
+    print(order)

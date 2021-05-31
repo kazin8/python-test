@@ -6,7 +6,7 @@
     "secret": "521a0fd53a7c4eeaa8177a497e5e4cbd",
 
     "strategy": {
-        "type": "priceLimit",
+        "type": "EmaRsiBBCombined",
         "buyPrice": 82.9,
         "sellPrice": 82.99,
         "profit": 0.09,
