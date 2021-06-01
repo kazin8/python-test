@@ -1,0 +1,16 @@
+{
+    "platform": "saxo",
+    "asset_type": "FxSpot",
+    "app_key": "28ebae46ed034be5a7179fa39b789946",
+    "auth_endpoint": "https://sim.logonvalidation.net/authorize",
+    "token_endpoint": "https://sim.logonvalidation.net/token",
+    "secret": "521a0fd53a7c4eeaa8177a497e5e4cbd",
+
+    "strategy": {
+        "backtesting": false,
+
+        "type": "RsiStrategy",
+        "ticker": "EURUSD",
+        "stake_amount": 1300
+    }
+}

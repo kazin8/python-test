@@ -1,11 +1,19 @@
 import json
-import pprint
-import traceback
+import time
+
+import schedule
 
 import pandas as pd
 
-from src.broker.saxo import SaxoBroker
-from strategies.EmaRsiBBCombined import EmaRsiBBCombined
+from src.logger import logger
+from src.broker.AlpacaBroker import AlpacaBroker
+from src.broker.SaxoBroker import SaxoBroker
+from src.storage.OrderMemoryStorage import shared_order_storage
+
+from strategies.BollingerBandsStrategy import BollingerBandsStrategy
+from strategies.Ema100Strategy import Ema100Strategy
+from strategies.Ema200Strategy import Ema200Strategy
+from strategies.RsiStrategy import RsiStrategy
 
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
@@ -19,56 +27,103 @@ STRATEGY_CONFIG = config.get('strategy')
 
 brokers = {
     'saxo': SaxoBroker,
+    'alpaca': AlpacaBroker,
 }
 
 strategies = {
-    'EmaRsiBBCombined': EmaRsiBBCombined,
+    'RsiStrategy': RsiStrategy,
+    'Ema100Strategy': Ema100Strategy,
+    'Ema200Strategy': Ema200Strategy,
+    'BollingerBandsStrategy': BollingerBandsStrategy,
     # 'SimplePriceLimit'
 }
 
-if __name__ == '__main__':
-    broker = None
-    try:
-        broker = brokers[config.get('platform')](config)
-    except KeyError:
-        print('Unknown broker ' + config.get('platform') + '; Stop working')
-        exit(1)
+logger.info('Enable broker ' + config.get('platform'))
+logger.info('Enable strategy ' + STRATEGY_CONFIG['type'])
+logger.info('Trade ticker ' + STRATEGY_CONFIG['ticker'])
+logger.info('Stake amount ' + str(STRATEGY_CONFIG['stake_amount']))
 
-    strategy = None
-    try:
-        strategy = strategies[STRATEGY_CONFIG['type']]()
-    except KeyError:
-        print('Unknown strategy type ' + STRATEGY_CONFIG['type'] + '; Stop working')
-        exit(1)
+broker = None
+try:
+    broker = brokers[config.get('platform')](config)
+except KeyError:
+    logger.error('Unknown broker ' + config.get('platform') + ', Stop working')
+    exit(1)
 
+strategy = None
+try:
+    strategy = strategies[STRATEGY_CONFIG['type']]()
+except KeyError:
+    logger.error('Unknown strategy type ' + STRATEGY_CONFIG['type'] + ', Stop working')
+    exit(1)
+
+
+def trader():
     instrument = broker.get_instrument(STRATEGY_CONFIG['ticker'])
     identifier = broker.get_instrument_id()
 
-    # out = access.get('trade/v1/infoprices/list', Uics=identifier, AssetType='FxSpot', Amount=STRATEGY['amount'],
-    #                  FieldGroups='DisplayAndFormat,Quote')
-
-    # get candles
-    out = broker.get_candles(identifier)
-
     # create dataframe
-    df = pd.DataFrame(out['Data'], columns=['Time', 'OpenAsk', 'HighAsk', 'LowAsk', 'CloseAsk'])
-    df.columns = ['time', 'open', 'high', 'low', 'close']
+    df = broker.get_dataframe(identifier, strategy.timeframe)
 
     # calculate strategy indicators & trends
     strategy.populate_indicators(dataframe=df, metadata=instrument)
     strategy.populate_buy_trend(dataframe=df, metadata=instrument)
     strategy.populate_sell_trend(dataframe=df, metadata=instrument)
 
-    print(df)
+    if STRATEGY_CONFIG['backtesting']:
+        for index, row in df.iterrows():
+            if index == 0:
+                continue
 
-    order = None
-    # when last row (current candle) has buy/sell signal
-    # script should place limit order
-    last_row = df.tail(1)
-    if last_row['buy'].bool():
-        order = broker.place_limit_order(identifier, 'Buy', STRATEGY_CONFIG['amount'], STRATEGY_CONFIG['buyPrice'])
-    elif last_row['sell'].bool():
-        # should be refactor to use local db with open orders
-        order = broker.place_limit_order(identifier, 'Sell', STRATEGY_CONFIG['amount'], STRATEGY_CONFIG['buyPrice'])
+            prev_row = df.loc[[index - 1]]
+            current_row = df.loc[[index]]
 
-    print(order)
+            price = current_row['close'].values[0]
+            if current_row['buy'].bool() and not shared_order_storage.get_last_buy_order():
+                broker.place_limit_order(identifier, 'Buy', STRATEGY_CONFIG['stake_amount'],
+                                         price, current_row['time'].values[0], True)
+
+            if current_row['sell'].bool() and shared_order_storage.get_last_buy_order():
+                last_buy_order = shared_order_storage.get_last_buy_order()
+
+                broker.place_limit_order(identifier, 'Sell', last_buy_order[0]['amount'],
+                                         price, current_row['time'].values[0], True)
+
+                shared_order_storage.move_orders_to_history()
+
+        if shared_order_storage.get_last_buy_order():
+            logger.info('There is one active trade')
+
+    else:
+        # when last row (current candle) has buy/sell signal
+        # script should place limit order
+        current_row = df.tail(1)
+
+        logger.debug('Current candle:\n{}', current_row)
+
+        price = current_row['close'].values[0]
+
+        # order = broker.place_limit_order(identifier, 'Buy', STRATEGY_CONFIG['stake_amount'], price)
+
+        if current_row['buy'].bool() and not shared_order_storage.get_last_buy_order():
+            broker.place_limit_order(identifier, 'Buy', STRATEGY_CONFIG['stake_amount'], price)
+        elif current_row['sell'].bool() and shared_order_storage.get_last_buy_order():
+            last_buy_order = shared_order_storage.get_last_buy_order()
+
+            broker.place_limit_order(identifier, 'Sell', last_buy_order[0]['amount'], price)
+
+            shared_order_storage.move_orders_to_history()
+
+
+if __name__ == '__main__':
+    if not STRATEGY_CONFIG['backtesting']:
+        logger.warning('Backtesting mode enabled')
+
+        schedule.every(1).minutes.do(trader)
+
+        while 1:
+            schedule.run_pending()
+            time.sleep(1)
+    else:
+        logger.warning('Live mode enabled')
+        trader()

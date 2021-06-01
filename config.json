@@ -1,16 +1,15 @@
 {
-    "platform": "saxo",
-    "app_key": "28ebae46ed034be5a7179fa39b789946",
-    "auth_endpoint": "https://sim.logonvalidation.net/authorize",
-    "token_endpoint": "https://sim.logonvalidation.net/token",
-    "secret": "521a0fd53a7c4eeaa8177a497e5e4cbd",
+    "platform": "alpaca",
+    "app_key": "PK4LUYQ1NULHL7H4CGSB",
+    "secret": "kKWcv4QbbIUS1HLWh2t3jXyWXgTr8tQvSngJsBTg",
+    "base_url": "https://paper-api.alpaca.markets",
+    "finnhub_key": "c2r559aad3iets16g1o0",
 
     "strategy": {
-        "type": "EmaRsiBBCombined",
-        "buyPrice": 82.9,
-        "sellPrice": 82.99,
-        "profit": 0.09,
-        "ticker": "SGDJPY",
-        "amount": 1000
+        "backtesting": false,
+
+        "type": "BollingerBandsStrategy",
+        "ticker": "TSLA",
+        "stake_amount": 1300
     }
 }

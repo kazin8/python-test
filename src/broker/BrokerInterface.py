@@ -1,19 +1,21 @@
 from abc import ABC, abstractmethod
 
+from pandas import DataFrame
+
 
 class BrokerInterface:
     @abstractmethod
     def get_instrument(self, ticker: str):
-        raise Exception('NotImplementedException')
+        raise NotImplementedError
 
     @abstractmethod
-    def get_candles(self, uic: str, timeframe: int, limit: int):
-        raise Exception('NotImplementedException')
+    def get_dataframe(self, uic, timeframe=60, limit=1000) -> DataFrame:
+        raise NotImplementedError
 
     @abstractmethod
     def place_limit_order(self, uic: str, direction: str, amount: float, price: float):
-        raise Exception('NotImplementedException')
+        raise NotImplementedError
 
     @abstractmethod
     def get_instrument_id(self):
-        raise Exception('NotImplementedException')
+        raise NotImplementedError

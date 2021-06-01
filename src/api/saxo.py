@@ -1,3 +1,5 @@
+from src.logger import logger
+
 import json
 import os
 from datetime import datetime
@@ -91,7 +93,7 @@ class Session:
             r = requests.get(self.auth_endpoint,
                              params={'response_type': 'code', 'client_id': self.app_key, 'state': self.state,
                                      'redirect_uri': REDIR_URI})
-            print("Log in and obtain authcode: " + r.url)
+            logger.warning("Log in and obtain authcode: {}", r.url)
             authcode = input("Paste authcode: ")
             token_json = requests.post(self.token_endpoint,
                                        params={'grant_type': 'authorization_code', 'code': authcode,
